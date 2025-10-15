@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milk Data</title>
+</head>
+<body>
+<h1>Daily Milk Record</h1>
+        {% if milk == []: %}
+        <p>Library is empty.</p>
+        {% endif %}
+    <ul>
+        <p>S No - Date - Milk_Qty(L) - Cost(INR)- Total_Cost(INR)</p>
+        {% for data in milk %}
+        <li>
+          <a href="{{ url_for('delete_data', id=data.id) }}">Delete</a>
+          {{data.id}} - {{data.date}} - {{data.milk_qty}} - {{data.cost}} - {{data.total_cost}}
+          <!-- <a href="{{ url_for('edit', id=data.id) }}">Edit Data</a> -->
+        </li>
+        {% endfor %}
+    </ul>
+<a href="{{ url_for('add') }}">Add New Record</a>
+</body>
+</html>
