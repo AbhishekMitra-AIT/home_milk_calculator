@@ -69,7 +69,37 @@ def home():
 
 @app.route("/edit", methods=["GET", "POST"])
 def edit():
-    pass
+    if request.method == "POST":
+        # Update record
+        milk_id = int(request.form.get("id"))
+        milk_record = db.get_or_404(Milk, milk_id)
+
+        try:
+            new_qty = float(request.form.get("number", 0))
+        except (ValueError, TypeError):
+            return redirect(url_for("home"))
+
+        new_cost = new_qty * 50.0
+
+        milk_record.milk_qty = new_qty
+        milk_record.cost = new_cost
+        db.session.commit()
+
+        # Recalculate running total_cost for all records ordered by id
+        result = db.session.execute(db.select(Milk).order_by(Milk.id))
+        records = list(result.scalars())
+        running_total = 0.0
+        for r in records:
+            running_total += (r.cost or 0.0)
+            r.total_cost = running_total
+        db.session.commit()
+
+        return redirect(url_for("home"))
+    else:
+        # Show edit form
+        milk_id = request.args.get("id")
+        milk_record = db.get_or_404(Milk, int(milk_id))
+        return render_template("edit.html", milk=milk_record)
 
 @app.route('/delete')
 def delete_data():

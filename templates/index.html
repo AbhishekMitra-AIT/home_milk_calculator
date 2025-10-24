@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -15,10 +15,62 @@
         <li>
           <a href="{{ url_for('delete_data', id=data.id) }}">Delete</a>
           {{data.id}} - {{data.date}} - {{data.milk_qty}} - {{data.cost}} - {{data.total_cost}}
-          <!-- <a href="{{ url_for('edit', id=data.id) }}">Edit Data</a> -->
+          <a href="{{ url_for('edit', id=data.id) }}">Edit Data</a>
         </li>
         {% endfor %}
     </ul>
 <a href="{{ url_for('add') }}">Add New Record</a>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milk Data</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; max-width: 900px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+        .actions a { margin-right: 8px; }
+    </style>
+</head>
+<body>
+<h1>Daily Milk Record</h1>
+
+{% if milk == [] %}
+  <p>Library is empty.</p>
+{% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>S No</th>
+        <th>Date</th>
+        <th>Milk Qty (L)</th>
+        <th>Cost (INR)</th>
+        <th>Total Cost (INR)</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for data in milk %}
+      <tr>
+        <td>{{ data.id }}</td>
+        <td>{{ data.date }}</td>
+        <td>{{ data.milk_qty }}</td>
+        <td>{{ data.cost }}</td>
+        <td>{{ data.total_cost }}</td>
+        <td class="actions">
+          <a href="{{ url_for('delete_data', id=data.id) }}" onclick="return confirm('Delete this record?')">Delete/</a>
+          <a href="{{ url_for('edit', id=data.id) }}">Edit</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+<p><a href="{{ url_for('add') }}">Add New Record</a></p>
 </body>
 </html>
