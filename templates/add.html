@@ -2,14 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Add Book</title>
+    <title>Add Milk Data</title>
   </head>
   <body>
     <h1>{{message}}</h1>
     <form action="/add" method="POST">
       <label>Milk Qty</label>
       <input name="number" type="text" />
+      <label>Date</label>
+      <input name="date" type="date" />
       <button type="submit">Add Record</button>
     </form>
+    <p><a href="{{ url_for('home') }}">Back to list</a></p>
   </body>
 </html>

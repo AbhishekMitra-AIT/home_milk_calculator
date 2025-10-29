@@ -6,7 +6,7 @@
     <title>Edit Milk Record</title>
     <style>
       label { display:block; margin:8px 0; }
-      input[type="number"] { width:160px; }
+      input[type="number"], input[type="date"] { width:160px; }
     </style>
 </head>
 <body>
@@ -19,6 +19,14 @@
         <p>Current Total Cost (INR): {{ milk.total_cost }}</p>
 
         <input type="hidden" name="id" value="{{ milk.id }}">
+
+        <label>
+            New Date:
+            <input name="date" type="date"
+            {% if milk.date %}
+                value="{{ milk.date.split('-')[2] }}-{{ milk.date.split('-')[1] }}-{{ milk.date.split('-')[0] }}"
+            {% endif %}>
+        </label>
 
         <label>
             New Milk Qty (L):

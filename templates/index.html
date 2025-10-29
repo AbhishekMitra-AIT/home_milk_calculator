@@ -39,8 +39,9 @@
 <body>
 <h1>Daily Milk Record</h1>
 
+<p><a href="{{ url_for('add') }}">Add New Record</a></p>
 {% if milk == [] %}
-  <p>Library is empty.</p>
+  <p>database is empty.</p>
 {% else %}
   <table>
     <thead>
@@ -56,8 +57,19 @@
     <tbody>
       {% for data in milk %}
       <tr>
-        <td>{{ data.id }}</td>
-        <td>{{ data.date }}</td>
+        <!-- show sequential S No based on the current sorted list -->
+        <td>{{ loop.index }}</td>
+        <td>
+          {% if data.date %}
+            {# display as DD-MM-YYYY if stored as YYYY-MM-DD #}
+            {% set parts = data.date.split('-') %}
+            {% if parts|length == 3 %}
+              {{ parts[2] }}-{{ parts[1] }}-{{ parts[0] }}
+            {% else %}
+              {{ data.date }}
+            {% endif %}
+          {% endif %}
+        </td>
         <td>{{ data.milk_qty }}</td>
         <td>{{ data.cost }}</td>
         <td>{{ data.total_cost }}</td>
@@ -71,6 +83,6 @@
   </table>
 {% endif %}
 
-<p><a href="{{ url_for('add') }}">Add New Record</a></p>
+
 </body>
 </html>

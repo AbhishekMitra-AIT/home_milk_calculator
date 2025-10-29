@@ -31,16 +31,27 @@ class Milk(db.Model):
 with app.app_context():
     db.create_all()
 
+# helper to recalculate running totals ordering by date
+def recalc_totals():
+    with app.app_context():
+        result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
+        records = list(result.scalars())
+        running_total = 0.0
+        for r in records:
+            running_total += (r.cost or 0.0)
+            r.total_cost = running_total
+        db.session.commit()
+
 # Read All Records
 with app.app_context():
-    result = db.session.execute(db.select(Milk).order_by(Milk.id))
+    result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
     milk_data = list(result.scalars())  # Convert to list while session is open
 if milk_data==[]:
     print("No milk data found in the database.")
 else:
   for milk in milk_data: 
     print("Milk Data:")
-    milk.cost += milk.total_cost
+    # milk.cost += milk.total_cost
     print(f"{milk.id} - {milk.date} - {milk.milk_qty} - {milk.cost} - {milk.total_cost}")
       
 
@@ -58,12 +69,10 @@ This will install the packages from requirements.txt for this project.
 '''
 
 
-
-
 @app.route('/')
 def home():
     with app.app_context():
-        result = db.session.execute(db.select(Milk).order_by(Milk.id))
+        result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
         milk_data = list(result.scalars())  # Convert to list while session is open
     return render_template("index.html", milk=milk_data)
 
@@ -73,6 +82,16 @@ def edit():
         # Update record
         milk_id = int(request.form.get("id"))
         milk_record = db.get_or_404(Milk, milk_id)
+        
+        # Handle new date (HTML date input returns YYYY-MM-DD)
+        new_date_raw = request.form.get("date")
+        if new_date_raw:
+            try:
+                parsed = dt.datetime.strptime(new_date_raw, "%Y-%m-%d")
+                milk_record.date = parsed.strftime("%d-%m-%Y")
+            except (ValueError, TypeError):
+                # keep existing date on parse error
+                pass
 
         try:
             new_qty = float(request.form.get("number", 0))
@@ -85,14 +104,8 @@ def edit():
         milk_record.cost = new_cost
         db.session.commit()
 
-        # Recalculate running total_cost for all records ordered by id
-        result = db.session.execute(db.select(Milk).order_by(Milk.id))
-        records = list(result.scalars())
-        running_total = 0.0
-        for r in records:
-            running_total += (r.cost or 0.0)
-            r.total_cost = running_total
-        db.session.commit()
+        # Recalculate running total_cost for all records ordered by date
+        recalc_totals()
 
         return redirect(url_for("home"))
     else:
@@ -108,36 +121,50 @@ def delete_data():
     milk_to_delete = db.get_or_404(Milk, int(milk_id))
     db.session.delete(milk_to_delete)
     db.session.commit()
+
+    # Recalculate totals after deletion
+    recalc_totals()
     return redirect(url_for('home'))
 
 @app.route("/add", methods=["GET", "POST"])
 def add():
     if request.method == "POST":
-        milk_qty = request.form["number"]
-        cost = float(milk_qty)*50.0
+        # get and validate quantity
+        milk_qty_raw = request.form.get("number", "0")
+        try:
+            milk_qty = float(milk_qty_raw)
+        except (ValueError, TypeError):
+            return redirect(url_for('add'))
+
+        cost = milk_qty * 50.0
         
-        # CREATE new RECORD
-        '''
-        When creating new records, the primary key fields is optional. you can also write:
-        new_book = Book(title="Harry Potter", author="J. K. Rowling", rating=9.3)
-        the id field will be auto-generated. 
-        '''
+        # handle optional date input (HTML date returns YYYY-MM-DD)
+        date_raw = request.form.get("date")
+        if date_raw:
+            try:
+                parsed = dt.datetime.strptime(date_raw, "%Y-%m-%d")
+                date_str = parsed.strftime("%d-%m-%Y")
+            except (ValueError, TypeError):
+                date_str = dt.datetime.now().strftime("%d-%m-%Y")
+        else:
+            date_str = dt.datetime.now().strftime("%d-%m-%Y")
+
         with app.app_context():
-            
             prev_total = db.session.query(db.func.sum(Milk.cost)).scalar() or 0.0
             total_cost = prev_total + cost
 
             new_record = Milk(
                 milk_qty=milk_qty,
-                date=dt.datetime.now().strftime("%d-%m-%Y"),
+                date=date_str,
                 cost=cost,
                 total_cost=total_cost
             )
             db.session.add(new_record)
             db.session.commit()
 
-        # return render_template("add.html", message="Book added successfully!")
-        return redirect(url_for('home'))  # Redirect to home page after adding record
+        # Recalculate running totals ordered by date (so inserting past date is handled)
+            recalc_totals()
+        return redirect(url_for('home'))
     else:
         return render_template("add.html")
 
