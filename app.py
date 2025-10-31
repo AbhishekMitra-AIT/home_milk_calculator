@@ -74,7 +74,9 @@ def home():
     with app.app_context():
         result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
         milk_data = list(result.scalars())  # Convert to list while session is open
-    return render_template("index.html", milk=milk_data)
+        # compute total cost (sum of cost fields) to show beside "Add New Record"
+        total_cost_all = sum((m.cost or 0.0) for m in milk_data)
+    return render_template("index.html", milk=milk_data, total=total_cost_all)
 
 @app.route("/edit", methods=["GET", "POST"])
 def edit():

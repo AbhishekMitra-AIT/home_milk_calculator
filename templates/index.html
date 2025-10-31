@@ -39,7 +39,10 @@
 <body>
 <h1>Daily Milk Record</h1>
 
-<p><a href="{{ url_for('add') }}">Add New Record</a></p>
+<p><a href="{{ url_for('add') }}">Add New Record</a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<strong>Total Cost: ₹{{ total | round(2) }}</strong>
+</p>
 {% if milk == [] %}
   <p>database is empty.</p>
 {% else %}
