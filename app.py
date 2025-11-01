@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Float
 import datetime as dt
+from collections import defaultdict
 
 # how initialise the db object, define your model, 
 # and create the table. 
@@ -25,21 +26,33 @@ class Milk(db.Model):
     date: Mapped[str] = mapped_column(String(250), nullable=True)
     milk_qty: Mapped[float] = mapped_column(Float, nullable=True)
     cost: Mapped[float] = mapped_column(Float, nullable=True)
-    total_cost: Mapped[float] = mapped_column(Float, nullable=True)
+    month_year: Mapped[str] = mapped_column(String(50), nullable=True)  # Store "MM-YYYY"
 
 # Create table schema in the database. Requires application context.
 with app.app_context():
     db.create_all()
 
-# helper to recalculate running totals ordering by date
-def recalc_totals():
+# helper to extract month-year from date string
+def get_month_year(date_str):
+    """Extract MM-YYYY from DD-MM-YYYY date string"""
+    if date_str:
+        parts = date_str.split('-')
+        if len(parts) == 3:
+            return f"{parts[1]}-{parts[2]}"  # MM-YYYY
+    return None
+
+# helper to recalculate monthly totals
+def recalc_monthly_totals():
     with app.app_context():
         result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
         records = list(result.scalars())
-        running_total = 0.0
+        
+        # Group by month_year and calculate totals per month
+        monthly_groups = defaultdict(list)
         for r in records:
-            running_total += (r.cost or 0.0)
-            r.total_cost = running_total
+            if r.month_year:
+                monthly_groups[r.month_year].append(r)
+        
         db.session.commit()
 
 # Read All Records
@@ -51,32 +64,37 @@ if milk_data==[]:
 else:
   for milk in milk_data: 
     print("Milk Data:")
-    # milk.cost += milk.total_cost
-    print(f"{milk.id} - {milk.date} - {milk.milk_qty} - {milk.cost} - {milk.total_cost}")
-      
-
-'''
-Red underlines? Install the required packages first: 
-Open the Terminal in PyCharm (bottom left). 
-
-On Windows type:
-python -m pip install -r requirements.txt
-
-On MacOS type:
-pip3 install -r requirements.txt
-
-This will install the packages from requirements.txt for this project.
-'''
+    print(f"{milk.id} - {milk.date} - {milk.milk_qty} - {milk.cost} - {milk.month_year}")
 
 
 @app.route('/')
 def home():
     with app.app_context():
-        result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
-        milk_data = list(result.scalars())  # Convert to list while session is open
-        # compute total cost (sum of cost fields) to show beside "Add New Record"
+        result = db.session.execute(db.select(Milk).order_by(Milk.date.desc(), Milk.id.desc()))
+        milk_data = list(result.scalars())
+        
+        # Group records by month-year
+        monthly_data = defaultdict(list)
+        for record in milk_data:
+            if record.month_year:
+                monthly_data[record.month_year].append(record)
+        
+        # Calculate monthly totals
+        monthly_totals = {}
+        for month, records in monthly_data.items():
+            monthly_totals[month] = sum((r.cost or 0.0) for r in records)
+        
+        # Sort months in descending order (most recent first)
+        sorted_months = sorted(monthly_data.keys(), key=lambda x: dt.datetime.strptime(x, "%m-%Y"), reverse=True)
+        
+        # Compute overall total
         total_cost_all = sum((m.cost or 0.0) for m in milk_data)
-    return render_template("index.html", milk=milk_data, total=total_cost_all)
+    
+    return render_template("index.html", 
+                         monthly_data=monthly_data, 
+                         sorted_months=sorted_months,
+                         monthly_totals=monthly_totals,
+                         total=total_cost_all)
 
 @app.route("/edit", methods=["GET", "POST"])
 def edit():
@@ -91,6 +109,7 @@ def edit():
             try:
                 parsed = dt.datetime.strptime(new_date_raw, "%Y-%m-%d")
                 milk_record.date = parsed.strftime("%d-%m-%Y")
+                milk_record.month_year = parsed.strftime("%m-%Y")
             except (ValueError, TypeError):
                 # keep existing date on parse error
                 pass
@@ -106,8 +125,8 @@ def edit():
         milk_record.cost = new_cost
         db.session.commit()
 
-        # Recalculate running total_cost for all records ordered by date
-        recalc_totals()
+        # Recalculate monthly totals
+        recalc_monthly_totals()
 
         return redirect(url_for("home"))
     else:
@@ -125,7 +144,7 @@ def delete_data():
     db.session.commit()
 
     # Recalculate totals after deletion
-    recalc_totals()
+    recalc_monthly_totals()
     return redirect(url_for('home'))
 
 @app.route("/add", methods=["GET", "POST"])
@@ -146,26 +165,28 @@ def add():
             try:
                 parsed = dt.datetime.strptime(date_raw, "%Y-%m-%d")
                 date_str = parsed.strftime("%d-%m-%Y")
+                month_year_str = parsed.strftime("%m-%Y")
             except (ValueError, TypeError):
-                date_str = dt.datetime.now().strftime("%d-%m-%Y")
+                now = dt.datetime.now()
+                date_str = now.strftime("%d-%m-%Y")
+                month_year_str = now.strftime("%m-%Y")
         else:
-            date_str = dt.datetime.now().strftime("%d-%m-%Y")
+            now = dt.datetime.now()
+            date_str = now.strftime("%d-%m-%Y")
+            month_year_str = now.strftime("%m-%Y")
 
         with app.app_context():
-            prev_total = db.session.query(db.func.sum(Milk.cost)).scalar() or 0.0
-            total_cost = prev_total + cost
-
             new_record = Milk(
                 milk_qty=milk_qty,
                 date=date_str,
                 cost=cost,
-                total_cost=total_cost
+                month_year=month_year_str
             )
             db.session.add(new_record)
             db.session.commit()
 
-        # Recalculate running totals ordered by date (so inserting past date is handled)
-            recalc_totals()
+            # Recalculate monthly totals
+            recalc_monthly_totals()
         return redirect(url_for('home'))
     else:
         return render_template("add.html")
@@ -174,4 +195,3 @@ def add():
 if __name__ == "__main__":
     # app.run(debug=True)
     app.run(host='0.0.0.0', port=5000)
-
