@@ -10,7 +10,7 @@ website - https://home-milk-calculator.onrender.com
 
 Ref using python anywhere - https://www.youtube.com/watch?v=Bx_jHawKn5A
 
-website - https://abhishekmitra.pythonanywhere.com/ -> currently debugging, having bugs..
+website - [https://abhishekmitra.pythonanywhere.com/ -> currently debugging, having bugs..](https://web-production-01a84.up.railway.app/)
 
 steps for running app in local server
 1. create a virtual environment (python -m venv venv)
