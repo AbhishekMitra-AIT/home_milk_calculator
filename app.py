@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for , flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Float
@@ -14,6 +14,8 @@ db = SQLAlchemy(model_class=Base)
 
 # create the app
 app = Flask(__name__)
+
+app.config["SECRET_KEY"] = 'Arson'
 
 # configure the SQLite database, relative to the app instance folder
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///milk-calculation.db"
@@ -176,6 +178,13 @@ def add():
             month_year_str = now.strftime("%m-%Y")
 
         with app.app_context():
+            existing_entry = db.session.execute(
+                db.select(Milk).filter_by(date=date_str)
+            ).scalar_one_or_none()
+            
+            if existing_entry:
+                flash(f'An entry for {date_str} already exists!', 'error')
+                return redirect(url_for('add'))
             new_record = Milk(
                 milk_qty=milk_qty,
                 date=date_str,
@@ -194,4 +203,4 @@ def add():
 
 if __name__ == "__main__":
     # app.run(debug=True)
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
