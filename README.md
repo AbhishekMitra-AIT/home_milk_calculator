@@ -43,6 +43,8 @@ home_milk_calculator/
 Ref using python anywhere - https://www.youtube.com/watch?v=Bx_jHawKn5A
 
 website - (https://web-production-01a84.up.railway.app/)
+Github OAuth Apps - (https://github.com/settings/developers)
+Google OAuth - (https://console.cloud.google.com/welcome?project=feisty-audio-423608-v1)
 
 ## 🚀 Installation steps for running app in local server
 
