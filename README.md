@@ -47,7 +47,7 @@ website - (https://web-production-01a84.up.railway.app/)
 ## 🚀 Installation steps for running app in local server
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python > 3.9
 - pip package manager
 - Git (for cloning)
 
