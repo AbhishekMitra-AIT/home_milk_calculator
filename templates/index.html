@@ -84,10 +84,22 @@
 <body>
 <h1>Daily Milk Record</h1>
 
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
 <div class="header">
     <a href="{{ url_for('add') }}" class="add-button">+ Add New Record</a>
     <!-- <span class="grand-total">Grand Total: ₹{{ total | round(2) }}</span> -->
-</div>
+    <div style="display: flex; gap: 15px; align-items: center;">
+        <span style="color: #666;">Welcome, <strong>{{ username }}</strong></span>
+        <a href="{{ url_for('logout') }}" style="background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-size: 14px;">Logout</a>
+    </div>
+  </div>
 
 {% if sorted_months == [] %}
   <p>Database is empty. Add your first record!</p>

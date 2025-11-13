@@ -380,7 +380,8 @@ def home():
                          monthly_data=monthly_data, 
                          sorted_months=sorted_months,
                          monthly_totals=monthly_totals,
-                         total=total_cost_all)
+                         total=total_cost_all,
+                         username=session.get('username'))
 
 @app.route("/edit", methods=["GET", "POST"])
 def edit():
