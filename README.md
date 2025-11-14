@@ -25,16 +25,20 @@ Daily Milk Delivery Management System - Developed a web-based solution to digiti
 home_milk_calculator/
 │
 ├── instance/milk-calculation.db    # sqlite db file
-├── src
+<!-- ├── src
 │    └──  app.py                    # main application                                           
-│    └──  migrate_database.py       # script for db migration
+│    └──  migrate_database.py       # script for db migration -->
 ├── templates/                      # html files
 │        └──  add.html
 │        └──  edit.html
 │        └──  index.html
 ├── venv/                           # virtual environment
-├── .gitignore                      # files to be ignored by git 
-├── LICENSE          
+├── .gitignore                      # files to be ignored by git
+├── app.py                          # main application 
+├── LICENSE
+├── migrate_add_user_id.py
+├── migrate_database.py              # script for db migration
+├── LICENSE 
 ├── Procfile
 ├── README.md
 ├── requirements.txt                # Python dependencies
