@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Integer, String, Float, Boolean, DateTime
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey
 import datetime as dt, os, secrets
 from collections import defaultdict
 import requests, os, secrets, smtplib
@@ -12,8 +12,6 @@ from functools import wraps
 from itsdangerous import URLSafeTimedSerializer
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
-
 
 
 # how initialise the db object, define your model, 
@@ -76,6 +74,9 @@ class User(db.Model):
     oauth_id: Mapped[str] = mapped_column(String(200), nullable=True)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    
+    # Relationship to Milk records
+    milk_records = relationship('Milk', back_populates='user', cascade='all, delete-orphan')
  
 
 class Milk(db.Model):
@@ -84,6 +85,12 @@ class Milk(db.Model):
     milk_qty: Mapped[float] = mapped_column(Float, nullable=True)
     cost: Mapped[float] = mapped_column(Float, nullable=True)
     month_year: Mapped[str] = mapped_column(String(50), nullable=True)  # Store "MM-YYYY"
+    
+    # Foreign key to link to User
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('user.id'), nullable=False)
+    
+    # Relationship back to User
+    user = relationship('User', back_populates='milk_records')
 
 # Create table schema in the database. Requires application context.
 with app.app_context():
@@ -111,14 +118,14 @@ def send_verification_email(email, token):
     verification_url = url_for('verify_email', token=token, _external=True)
     
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = 'Verify Your Email - Athlete Dashboard'
+    msg['Subject'] = 'Verify Your Email - Milk Calculator'
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = email
     
     html = f"""
     <html>
       <body>
-        <h2>Welcome to Athlete Training Dashboard!</h2>
+        <h2>Welcome to Milk Calculator Dashboard!</h2>
         <p>Please click the link below to verify your email address:</p>
         <p><a href="{verification_url}">Verify Email</a></p>
         <p>Or copy and paste this URL into your browser:</p>
@@ -163,10 +170,14 @@ def get_month_year(date_str):
             return f"{parts[1]}-{parts[2]}"  # MM-YYYY
     return None
 
-# helper to recalculate monthly totals
-def recalc_monthly_totals():
+# helper to recalculate monthly totals (now user-specific)
+def recalc_monthly_totals(user_id):
     with app.app_context():
-        result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
+        result = db.session.execute(
+            db.select(Milk)
+            .filter_by(user_id=user_id)
+            .order_by(Milk.date, Milk.id)
+        )
         records = list(result.scalars())
         
         # Group by month_year and calculate totals per month
@@ -176,17 +187,6 @@ def recalc_monthly_totals():
                 monthly_groups[r.month_year].append(r)
         
         db.session.commit()
-
-# Read All Records
-with app.app_context():
-    result = db.session.execute(db.select(Milk).order_by(Milk.date, Milk.id))
-    milk_data = list(result.scalars())  # Convert to list while session is open
-if milk_data==[]:
-    print("No milk data found in the database.")
-else:
-  for milk in milk_data: 
-    print("Milk Data:")
-    print(f"{milk.id} - {milk.date} - {milk.milk_qty} - {milk.cost} - {milk.month_year}")
 
 
 # Authentication Routes
@@ -274,7 +274,6 @@ def verify_email(token):
 @app.route('/login/google')
 def google_login():
     redirect_uri = url_for('google_callback', _external=True).replace("http://", "https://")
-    # redirect_uri = "https://web-production-289c2.up.railway.app/callback/google"
     return google.authorize_redirect(redirect_uri)
 
 @app.route('/callback/google')
@@ -351,12 +350,19 @@ def logout():
     return redirect(url_for('login'))
 
 
-# Protected Routes
+# Protected Routes - Now user-specific
 @app.route('/')
 @login_required
 def home():
+    user_id = session.get('user_id')
+    
     with app.app_context():
-        result = db.session.execute(db.select(Milk).order_by(Milk.date.desc(), Milk.id.desc()))
+        # Filter milk data by current user
+        result = db.session.execute(
+            db.select(Milk)
+            .filter_by(user_id=user_id)
+            .order_by(Milk.date.desc(), Milk.id.desc())
+        )
         milk_data = list(result.scalars())
         
         # Group records by month-year
@@ -384,11 +390,20 @@ def home():
                          username=session.get('username'))
 
 @app.route("/edit", methods=["GET", "POST"])
+@login_required
 def edit():
+    user_id = session.get('user_id')
+    
     if request.method == "POST":
         # Update record
         milk_id = int(request.form.get("id"))
-        milk_record = db.get_or_404(Milk, milk_id)
+        milk_record = db.session.execute(
+            db.select(Milk).filter_by(id=milk_id, user_id=user_id)
+        ).scalar_one_or_none()
+        
+        if not milk_record:
+            flash('Record not found or access denied', 'error')
+            return redirect(url_for("home"))
         
         # Handle new date (HTML date input returns YYYY-MM-DD)
         new_date_raw = request.form.get("date")
@@ -398,7 +413,6 @@ def edit():
                 milk_record.date = parsed.strftime("%d-%m-%Y")
                 milk_record.month_year = parsed.strftime("%m-%Y")
             except (ValueError, TypeError):
-                # keep existing date on parse error
                 pass
 
         try:
@@ -413,35 +427,59 @@ def edit():
         db.session.commit()
 
         # Recalculate monthly totals
-        recalc_monthly_totals()
+        recalc_monthly_totals(user_id)
 
+        flash('Record updated successfully!', 'success')
         return redirect(url_for("home"))
     else:
         # Show edit form
         milk_id = request.args.get("id")
-        milk_record = db.get_or_404(Milk, int(milk_id))
+        milk_record = db.session.execute(
+            db.select(Milk).filter_by(id=int(milk_id), user_id=user_id)
+        ).scalar_one_or_none()
+        
+        if not milk_record:
+            flash('Record not found or access denied', 'error')
+            return redirect(url_for("home"))
+            
         return render_template("edit.html", milk=milk_record)
 
 @app.route('/delete')
+@login_required
 def delete_data():
-    # DELETE RECORD
+    user_id = session.get('user_id')
+    
+    # DELETE RECORD - only if it belongs to current user
     milk_id = request.args.get('id')
-    milk_to_delete = db.get_or_404(Milk, int(milk_id))
+    milk_to_delete = db.session.execute(
+        db.select(Milk).filter_by(id=int(milk_id), user_id=user_id)
+    ).scalar_one_or_none()
+    
+    if not milk_to_delete:
+        flash('Record not found or access denied', 'error')
+        return redirect(url_for('home'))
+    
     db.session.delete(milk_to_delete)
     db.session.commit()
 
     # Recalculate totals after deletion
-    recalc_monthly_totals()
+    recalc_monthly_totals(user_id)
+    
+    flash('Record deleted successfully!', 'success')
     return redirect(url_for('home'))
 
 @app.route("/add", methods=["GET", "POST"])
+@login_required
 def add():
+    user_id = session.get('user_id')
+    
     if request.method == "POST":
         # get and validate quantity
         milk_qty_raw = request.form.get("number", "0")
         try:
             milk_qty = float(milk_qty_raw)
         except (ValueError, TypeError):
+            flash('Invalid milk quantity', 'error')
             return redirect(url_for('add'))
 
         cost = milk_qty * 50.0
@@ -463,8 +501,9 @@ def add():
             month_year_str = now.strftime("%m-%Y")
 
         with app.app_context():
+            # Check if entry exists for this user and date
             existing_entry = db.session.execute(
-                db.select(Milk).filter_by(date=date_str)
+                db.select(Milk).filter_by(date=date_str, user_id=user_id)
             ).scalar_one_or_none()
             
             if existing_entry:
@@ -475,13 +514,16 @@ def add():
                 milk_qty=milk_qty,
                 date=date_str,
                 cost=cost,
-                month_year=month_year_str
+                month_year=month_year_str,
+                user_id=user_id  # Link to current user
             )
             db.session.add(new_record)
             db.session.commit()
 
             # Recalculate monthly totals
-            recalc_monthly_totals()
+            recalc_monthly_totals(user_id)
+        
+        flash('Record added successfully!', 'success')
         return redirect(url_for('home'))
     else:
         return render_template("add.html")
