@@ -101,6 +101,8 @@ Please ensure:
 - Documentation is updated
 - Commit messages are clear and descriptive
 
+![Process_Flowchart](assets/image.png)
+
 ## 👤 Author
 
 **Abhishek Mitra**
