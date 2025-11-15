@@ -61,9 +61,25 @@ def migrate_sqlite_to_postgres():
             # Clear existing data in PostgreSQL (optional)
             response = input("   Clear existing PostgreSQL data first? (y/n): ").lower()
             if response == 'y':
-                pg_cursor.execute("TRUNCATE TABLE milk, \"user\" RESTART IDENTITY CASCADE")
-                pg_conn.commit()
-                print("   ✓ Cleared existing data")
+                try:
+                    pg_cursor.execute("TRUNCATE TABLE milk, \"user\" RESTART IDENTITY CASCADE")
+                    pg_conn.commit()
+                    print("   ✓ Cleared existing data")
+                except Exception as e:
+                    print(f"   ⚠️  Could not clear data (tables may not exist yet): {e}")
+                    print("   Continuing with migration...")
+            
+            # Convert SQLite data types to PostgreSQL
+            # SQLite stores booleans as 0/1, PostgreSQL needs TRUE/FALSE
+            converted_users = []
+            for user in users:
+                user_list = list(user)
+                # Find email_verified column index
+                if 'email_verified' in user_columns:
+                    verified_idx = user_columns.index('email_verified')
+                    # Convert 0/1 to boolean
+                    user_list[verified_idx] = bool(user_list[verified_idx])
+                converted_users.append(tuple(user_list))
             
             # Insert users
             insert_query = f"""
@@ -71,7 +87,7 @@ def migrate_sqlite_to_postgres():
                 VALUES %s
                 ON CONFLICT (email) DO NOTHING
             """
-            execute_values(pg_cursor, insert_query, users)
+            execute_values(pg_cursor, insert_query, converted_users)
             pg_conn.commit()
             print(f"   ✓ Migrated {len(users)} users")
         else:
