@@ -1,7 +1,7 @@
 # home_milk_calculator
 Daily Milk Delivery Management System - Developed a web-based solution to digitize and automate household milk delivery tracking, eliminating manual record-keeping errors.
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-unlicense-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 
@@ -26,25 +26,30 @@ home_milk_calculator/
 │
 ├── instance/milk-calculation.db    # sqlite db file
 ├── templates/                      # html files
-├───────└──  add.html
-        └──  edit.html
-        └──  index.html
-├── venv/
-├── .gitignore
-├── app.py                          # main application                                           
+│        └──  add.html
+│        └──  edit.html
+│        └──  index.html
+├── venv/                           # virtual environment
+├── .gitignore                      # files to be ignored by git
+├── app.py                          # main application 
 ├── LICENSE
-├── migrate_database.py             # script for db migration
+├── migrate_add_user_id.py
+├── migrate_database.py              # script for db migration
+├── LICENSE 
 ├── Procfile
 ├── README.md
 ├── requirements.txt                # Python dependencies
 ```
 
+<!-- ├── src
+│    └──  app.py                    # main application                                           
+│    └──  migrate_database.py       # script for db migration -->
 
-Ref using python anywhere - https://www.youtube.com/watch?v=Bx_jHawKn5A
+<!-- Ref using python anywhere - https://www.youtube.com/watch?v=Bx_jHawKn5A -->
 
-website - (https://web-production-01a84.up.railway.app/)
-Github OAuth Apps - (https://github.com/settings/developers)
-Google OAuth - (https://console.cloud.google.com/welcome?project=feisty-audio-423608-v1)
+- website - (https://web-production-01a84.up.railway.app/)
+- Github OAuth Apps - (https://github.com/settings/developers)
+- Google OAuth - (https://console.cloud.google.com/welcome?project=feisty-audio-423608-v1)
 
 ## 🚀 Installation steps for running app in local server
 
