@@ -101,7 +101,7 @@ Please ensure:
 - Documentation is updated
 - Commit messages are clear and descriptive
 
-<!-- ![Process_Flowchart](assets/image.png) -->
+![Process_Flowchart](assets/image.png)
 
 ![Development_Environments](assets/dev_env.png)
 
