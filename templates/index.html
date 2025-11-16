@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Milk Data</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milk Data - Dashboard</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -15,6 +16,20 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-left {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-right {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
         }
         .month-section {
             margin-bottom: 40px;
@@ -30,6 +45,8 @@
             margin-bottom: 15px;
             padding-bottom: 10px;
             border-bottom: 2px solid #333;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .month-title {
             font-size: 1.3em;
@@ -45,6 +62,13 @@
             border-collapse: collapse; 
             width: 100%; 
             background: white;
+            overflow-x: auto;
+            display: block;
+        }
+        thead, tbody {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
         }
         th, td { 
             border: 1px solid #ccc; 
@@ -63,26 +87,107 @@
         .actions a:hover {
             text-decoration: underline;
         }
-        .add-button {
-            background: #4CAF50;
+        .add-button, .settings-button {
             color: white;
             padding: 10px 20px;
             text-decoration: none;
             border-radius: 4px;
             font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        .add-button {
+            background: #4CAF50;
         }
         .add-button:hover {
             background: #45a049;
         }
-        .grand-total {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #d9534f;
+        .settings-button {
+            background: #667eea;
+        }
+        .settings-button:hover {
+            background: #5568d3;
+        }
+        .logout-button {
+            background: #dc3545;
+            color: white;
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .logout-button:hover {
+            background: #c82333;
+        }
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .welcome-text {
+            color: #666;
+            font-size: 14px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        .empty-state h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .empty-state p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .header-left, .header-right {
+                width: 100%;
+                justify-content: center;
+            }
+            table {
+                font-size: 14px;
+            }
+            th, td {
+                padding: 6px;
+            }
+            .month-title {
+                font-size: 1.1em;
+            }
+            .month-total {
+                font-size: 1em;
+            }
         }
     </style>
 </head>
 <body>
-<h1>Daily Milk Record</h1>
+<h1>🐮 Daily Milk Record</h1>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -93,16 +198,22 @@
 {% endwith %}
 
 <div class="header">
-    <a href="{{ url_for('add') }}" class="add-button">+ Add New Record</a>
-    <!-- <span class="grand-total">Grand Total: ₹{{ total | round(2) }}</span> -->
-    <div style="display: flex; gap: 15px; align-items: center;">
-        <span style="color: #666;">Welcome, <strong>{{ username }}</strong></span>
-        <a href="{{ url_for('logout') }}" style="background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-size: 14px;">Logout</a>
+    <div class="header-left">
+        <a href="{{ url_for('add') }}" class="add-button">+ Add New Record</a>
+        <a href="{{ url_for('settings') }}" class="settings-button">⚙️ Settings</a>
     </div>
-  </div>
+    <div class="header-right">
+        <span class="welcome-text">Welcome, <strong>{{ username }}</strong></span>
+        <a href="{{ url_for('logout') }}" class="logout-button">Logout</a>
+    </div>
+</div>
 
 {% if sorted_months == [] %}
-  <p>Database is empty. Add your first record!</p>
+  <div class="empty-state">
+    <h2>📝 No Records Yet</h2>
+    <p>Start tracking your daily milk deliveries by adding your first record!</p>
+    <a href="{{ url_for('add') }}" class="add-button">Add Your First Record</a>
+  </div>
 {% else %}
   {% for month in sorted_months %}
   <div class="month-section">
@@ -117,7 +228,7 @@
           {{ month }}
         {% endif %}
       </span>
-      <span class="month-total">Monthly Total: ₹{{ monthly_totals[month] | round(2) }}</span>
+      <span class="month-total">Monthly Total: {{ currency_symbol }}{{ monthly_totals[month] | round(2) }}</span>
     </div>
     
     <table>
@@ -126,7 +237,7 @@
           <th>S No</th>
           <th>Date</th>
           <th>Milk Qty (L)</th>
-          <th>Cost (INR)</th>
+          <th>Cost ({{ currency_symbol }})</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -136,10 +247,10 @@
           <td>{{ loop.index }}</td>
           <td>{{ data.date }}</td>
           <td>{{ data.milk_qty }}</td>
-          <td>{{ data.cost }}</td>
+          <td>{{ currency_symbol }}{{ data.cost | round(2) }}</td>
           <td class="actions">
             <a href="{{ url_for('delete_data', id=data.id) }}" 
-               onclick="return confirm('Delete this record?')">Delete</a>
+               onclick="return confirm('Are you sure you want to delete this record?')">Delete</a>
             <a href="{{ url_for('edit', id=data.id) }}">/ Edit</a>
           </td>
         </tr>
