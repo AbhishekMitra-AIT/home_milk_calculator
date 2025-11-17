@@ -103,6 +103,8 @@ Please ensure:
 
 ![Process_Flowchart](assets/image.png)
 
+![Development_Environments](assets/dev_env.png)
+
 ## 👤 Author
 
 **Abhishek Mitra**

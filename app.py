@@ -4,7 +4,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey
 import datetime as dt, os, secrets
 from collections import defaultdict
-import requests, smtplib
+import smtplib
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
@@ -16,8 +16,7 @@ from email.mime.multipart import MIMEMultipart
 # Load environment variables
 load_dotenv()
 
-# how initialise the db object, define your model, 
-# and create the table. Database setup
+# Database setup
 class Base(DeclarativeBase):
     pass
 
@@ -32,7 +31,6 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     # Railway/Production: Use PostgreSQL
-    # Fix for Railway's postgres:// vs postgresql:// issue
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
@@ -44,8 +42,8 @@ else:
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_pre_ping": True,  # Verify connections before using
-    "pool_recycle": 300,    # Recycle connections after 5 minutes
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
 }
 
 # Email Configuration
@@ -95,6 +93,11 @@ class User(db.Model):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
     
+    # User settings
+    milk_price_per_litre: Mapped[float] = mapped_column(Float, default=50.0)
+    currency: Mapped[str] = mapped_column(String(10), default='INR')
+    currency_symbol: Mapped[str] = mapped_column(String(5), default='₹')
+    
     # Relationship to Milk records
     milk_records = relationship('Milk', back_populates='user', cascade='all, delete-orphan')
 
@@ -120,6 +123,27 @@ with app.app_context():
     try:
         db.create_all()
         print("✓ Database tables created/verified successfully")
+        
+        # Auto-migrate: Add settings columns if they don't exist
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+        
+        # Only for PostgreSQL (check if user table exists)
+        tables = inspector.get_table_names()
+        if 'user' in tables:
+            columns = [col['name'] for col in inspector.get_columns('user')]
+            
+            if 'milk_price_per_litre' not in columns:
+                db.session.execute(text('ALTER TABLE "user" ADD COLUMN milk_price_per_litre FLOAT DEFAULT 50.0'))
+                print("✓ Added milk_price_per_litre column")
+            if 'currency' not in columns:
+                db.session.execute(text("ALTER TABLE \"user\" ADD COLUMN currency VARCHAR(10) DEFAULT 'INR'"))
+                print("✓ Added currency column")
+            if 'currency_symbol' not in columns:
+                db.session.execute(text("ALTER TABLE \"user\" ADD COLUMN currency_symbol VARCHAR(5) DEFAULT '₹'"))
+                print("✓ Added currency_symbol column")
+            db.session.commit()
+        
     except Exception as e:
         print(f"✗ Database initialization error: {e}")
 
@@ -280,7 +304,7 @@ def register():
         if send_verification_email(email, token):
             flash('Registration successful! Please check your email to verify your account.', 'success')
         else:
-            flash('Registration successful! However, verification email could not be sent. Please contact support.', 'warning')
+            flash('Registration successful! However, verification email could not be sent.', 'warning')
         
         return redirect(url_for('login'))
     
@@ -394,6 +418,11 @@ def home():
     user_id = session.get('user_id')
     
     with app.app_context():
+        user = db.session.get(User, user_id)
+        if not user:
+            flash('User not found', 'error')
+            return redirect(url_for('logout'))
+        
         result = db.session.execute(
             db.select(Milk)
             .filter_by(user_id=user_id)
@@ -419,7 +448,8 @@ def home():
                          sorted_months=sorted_months,
                          monthly_totals=monthly_totals,
                          total=total_cost_all,
-                         username=session.get('username'))
+                         username=session.get('username'),
+                         currency_symbol=user.currency_symbol)
 
 
 @app.route("/edit", methods=["GET", "POST"])
@@ -451,7 +481,9 @@ def edit():
         except (ValueError, TypeError):
             return redirect(url_for("home"))
 
-        new_cost = new_qty * 50.0
+        user = db.session.get(User, user_id)
+        milk_price = user.milk_price_per_litre if user else 50.0
+        new_cost = new_qty * milk_price
 
         milk_record.milk_qty = new_qty
         milk_record.cost = new_cost
@@ -503,6 +535,9 @@ def add():
     user_id = session.get('user_id')
     
     if request.method == "POST":
+        user = db.session.get(User, user_id)
+        milk_price = user.milk_price_per_litre if user else 50.0
+        
         milk_qty_raw = request.form.get("number", "0")
         try:
             milk_qty = float(milk_qty_raw)
@@ -510,7 +545,7 @@ def add():
             flash('Invalid milk quantity', 'error')
             return redirect(url_for('add'))
 
-        cost = milk_qty * 50.0
+        cost = milk_qty * milk_price
         
         date_raw = request.form.get("date")
         if date_raw:
@@ -552,6 +587,70 @@ def add():
         return redirect(url_for('home'))
     else:
         return render_template("add.html")
+
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    user_id = session.get('user_id')
+    user = db.session.get(User, user_id)
+    
+    if not user:
+        flash('User not found', 'error')
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        milk_price = request.form.get('milk_price')
+        currency = request.form.get('currency', 'INR')
+        currency_symbol = request.form.get('currency_symbol', '₹')
+        recalculate = request.form.get('recalculate') == 'yes'
+        
+        try:
+            new_price = float(milk_price)
+            if new_price <= 0:
+                flash('Milk price must be greater than 0', 'error')
+                return redirect(url_for('settings'))
+            
+            old_price = user.milk_price_per_litre
+            
+            user.milk_price_per_litre = new_price
+            user.currency = currency
+            user.currency_symbol = currency_symbol
+            db.session.commit()
+            
+            if recalculate and old_price != new_price:
+                milk_records = db.session.execute(
+                    db.select(Milk).filter_by(user_id=user_id)
+                ).scalars().all()
+                
+                for record in milk_records:
+                    record.cost = record.milk_qty * new_price
+                
+                db.session.commit()
+                flash(f'Settings updated! Recalculated {len(milk_records)} records with new price.', 'success')
+            else:
+                flash('Settings updated successfully!', 'success')
+            
+            return redirect(url_for('home'))
+            
+        except (ValueError, TypeError):
+            flash('Invalid milk price', 'error')
+            return redirect(url_for('settings'))
+    
+    currencies = [
+        {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
+        {'code': 'USD', 'symbol': '$', 'name': 'US Dollar'},
+        {'code': 'EUR', 'symbol': '€', 'name': 'Euro'},
+        {'code': 'GBP', 'symbol': '£', 'name': 'British Pound'},
+        {'code': 'JPY', 'symbol': '¥', 'name': 'Japanese Yen'},
+        {'code': 'AUD', 'symbol': 'A$', 'name': 'Australian Dollar'},
+        {'code': 'CAD', 'symbol': 'C$', 'name': 'Canadian Dollar'},
+        {'code': 'CHF', 'symbol': 'Fr', 'name': 'Swiss Franc'},
+        {'code': 'CNY', 'symbol': '¥', 'name': 'Chinese Yuan'},
+        {'code': 'AED', 'symbol': 'د.إ', 'name': 'UAE Dirham'},
+    ]
+    
+    return render_template('settings.html', user=user, currencies=currencies)
 
 
 if __name__ == "__main__":
