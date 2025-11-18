@@ -22,23 +22,35 @@ Daily Milk Delivery Management System - Developed a web-based solution to digiti
 ## 📁 Project Structure
 
 ```
-home_milk_calculator/
-│
-├── instance/milk-calculation.db    # sqlite db file
-├── templates/                      # html files
-│        └──  add.html
-│        └──  edit.html
-│        └──  index.html
-├── venv/                           # virtual environment
-├── .gitignore                      # files to be ignored by git
-├── app.py                          # main application 
-├── LICENSE
-├── migrate_add_user_id.py
-├── migrate_database.py              # script for db migration
-├── LICENSE 
-├── Procfile
-├── README.md
-├── requirements.txt                # Python dependencies
+# home_milk_calculator/
+# ├── app.py                        # Main application entry point(at root)
+# ├── app_refactored.py             # Main refactored app (at root)
+# ├── assets/                       # image files
+# ├── instance/                     # db files
+# ├── models/
+# │   ├── __init__.py
+# │   └── models.py                 # Database models
+# ├── supporting_python_files/      # python scripts used while testing app.py
+# ├── templates/                    # html files
+# │   ├── index.html
+# │   ├── login.html
+# │   ├── register.html
+# │   ├── add.html
+# │   ├── edit.html
+# │   └── settings.html
+# ├── utils/                        # Configuration settings
+# │   ├── __init__.py
+# │   └── config.py                 
+# ├── views/                        # Helper functions
+# │   ├── __init__.py
+# │   └── helpers.py                
+# ├── requirements.txt
+# ├── .gitignore
+# ├── Dockerfile                    
+# ├── LICENCE
+# ├── README.md
+# ├── Procfile
+# ├── sqlite_backup.sql             # postgresql backup
 ```
 
 <!-- ├── src
@@ -111,6 +123,7 @@ Please ensure:
 - GitHub: [@AbhishekMitra-AIT](https://github.com/AbhishekMitra-AIT)
 - LinkedIn: [Abhishek Mitra](https://www.linkedin.com/in/abhishekmitra03/)
 - Email: abhishekmitra91@gmail.com
+- Discord : [Abhishek Mitra](https://discord.com/channels/@abhishekmitra-ait)
 
 **⭐ If you find this project useful, please consider giving it a star!**
 
