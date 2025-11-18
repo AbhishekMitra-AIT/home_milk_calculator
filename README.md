@@ -22,35 +22,35 @@ Daily Milk Delivery Management System - Developed a web-based solution to digiti
 ## 📁 Project Structure
 
 ```
-# home_milk_calculator/
-# ├── app.py                        # Main application entry point(at root)
-# ├── app_refactored.py             # Main refactored app (at root)
-# ├── assets/                       # image files
-# ├── instance/                     # db files
-# ├── models/
-# │   ├── __init__.py
-# │   └── models.py                 # Database models
-# ├── supporting_python_files/      # python scripts used while testing app.py
-# ├── templates/                    # html files
-# │   ├── index.html
-# │   ├── login.html
-# │   ├── register.html
-# │   ├── add.html
-# │   ├── edit.html
-# │   └── settings.html
-# ├── utils/                        # Configuration settings
-# │   ├── __init__.py
-# │   └── config.py                 
-# ├── views/                        # Helper functions
-# │   ├── __init__.py
-# │   └── helpers.py                
-# ├── requirements.txt
-# ├── .gitignore
-# ├── Dockerfile                    
-# ├── LICENCE
-# ├── README.md
-# ├── Procfile
-# ├── sqlite_backup.sql             # postgresql backup
+home_milk_calculator/
+├── app.py                        # Main application entry point(at root)
+├── app_refactored.py             # Main refactored app (at root)
+├── assets/                       # image files
+├── instance/                     # db files
+├── models/
+│   ├── __init__.py
+│   └── models.py                 # Database models
+├── supporting_python_files/      # python scripts used while testing app.py
+├── templates/                    # html files
+│   ├── index.html
+│   ├── login.html
+│   ├── register.html
+│   ├── add.html
+│   ├── edit.html
+│   └── settings.html
+├── utils/                        # Configuration settings
+│   ├── __init__.py
+│   └── config.py                 
+├── views/                        # Helper functions
+│   ├── __init__.py
+│   └── helpers.py                
+├── requirements.txt
+├── .gitignore
+├── Dockerfile                    
+├── LICENCE
+├── README.md
+├── Procfile
+├── sqlite_backup.sql             # postgresql backup
 ```
 
 <!-- ├── src
