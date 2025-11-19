@@ -27,8 +27,8 @@ jobs:
       - name: Check line length
         run: |
           # This will exit with status 1 (failure) if any lines are too long
-          flake8 . --max-line-length=160 --select=E501 --count --statistics
+          flake8 . --max-line-length=130 --select=E501 --count --statistics
           if [ $? -eq 1 ]; then
-            echo "Error: Found lines longer than 160 characters"
+            echo "Error: Found lines longer than 130 characters"
             exit 1
           fi
