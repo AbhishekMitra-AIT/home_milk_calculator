@@ -1,0 +1,34 @@
+name: Python Line Length Check
+
+on:
+  push:
+    paths:
+      - '**.py'
+  pull_request:
+    paths:
+      - '**.py'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          
+      - name: Install flake8
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+          
+      - name: Check line length
+        run: |
+          # This will exit with status 1 (failure) if any lines are too long
+          flake8 . --max-line-length=160 --select=E501 --count --statistics
+          if [ $? -eq 1 ]; then
+            echo "Error: Found lines longer than 160 characters"
+            exit 1
+          fi
