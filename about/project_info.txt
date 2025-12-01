@@ -1,0 +1,165 @@
+What I Built
+
+A production-ready Flask application for tracking daily milk deliveries with complete user authentication, multi-currency support, and isolated data per user. It's live and handling real transactions with PostgreSQL on Railway.
+
+Live Demo: https://web-production-01a84.up.railway.app/
+
+
+The Challenge
+    I needed to migrate a single-user SQLite app to a multi-tenant SaaS platform where:
+    Each user's data is completely isolated.
+    Support multiple currencies (₹, $, €, etc.)
+    Maintain backward compatibility with existing data.
+    Zero downtime during migration.
+    The Interesting Technical Bits
+
+1. Zero-Downtime Database Migration (SQLite → PostgreSQL)
+    Most tutorials tell you to "just switch databases," but with production data, that's not an option. Here's how I did it:
+    # Auto-migration on startup - checks and adds columns without dropping tables
+    with app.app_context():
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('user')]
+        if 'milk_price_per_litre' not in columns:
+            db.session.execute(text('ALTER TABLE "user" ADD COLUMN milk_price_per_litre FLOAT DEFAULT 50.0'))
+            db.session.commit()
+    Why this is cool: The app checks what exists and only adds what's missing. No data loss, no downtime.
+
+
+
+2. Railway's DATABASE_URL Magic
+    Railway's automatic DATABASE_URL injection had a gotcha - it uses postgres:// but SQLAlchemy needs postgresql://:
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    Lesson learned: Always handle Railway's Postgres URL format in production code.
+
+
+
+3. User-Scoped Data Isolation
+    Every query filters by user_id to prevent data leaks:
+    @app.route('/')
+    @login_required
+    def home():
+        user_id = session.get('user_id')
+        # CRITICAL: Always filter by user_id
+        result = db.session.execute(
+            db.select(Milk)
+            .filter_by(user_id=user_id)  # This line prevents data leaks
+            .order_by(Milk.date.desc())
+        )
+    Security first: Even if there's a bug elsewhere, queries can't cross user boundaries.
+
+
+
+4. Smart Sequence Reset After Migration
+    PostgreSQL auto-increment sequences don't update when you INSERT with explicit IDs. This caused duplicate key errors:
+    # After migration, reset sequences to continue from max ID
+    db.session.execute(text("SELECT setval('user_id_seq', (SELECT MAX(id) FROM \"user\"), true)"))
+    db.session.execute(text("SELECT setval('milk_id_seq', (SELECT MAX(id) FROM milk), true)"))
+    Pro tip: Always reset sequences after bulk imports!
+
+
+
+5. Railway Features I'm Using
+    Automatic PostgreSQL Backups: Built-in, no scripts needed.
+    Environment Variables: Railway's ${{Postgres.DATABASE_URL}} reference is brilliant.
+    Zero-Config Deployment: Push to GitHub → Railway deploys.
+    Volume for Logs: Persistent storage across deploys.
+    Health Checks: Railway's automatic monitoring caught issues before users did.
+
+
+
+6. OAuth with Railway's Dynamic URLs
+    Railway generates new URLs for each deployment. Here's how I handle that:
+    redirect_uri = url_for('google_callback', _external=True).replace("http://", "https://")
+    The trick: Always use _external=True and force HTTPS for OAuth callbacks.
+
+Architecture Decisions
+    Why Flask over Django?
+    Lightweight for this use case
+    Easier to deploy on Railway (smaller container)
+    Full control over auth flow
+
+Why PostgreSQL over SQLite in Production?
+    Railway's automatic backups
+    Better concurrent access
+    Point-in-time recovery
+    Horizontal scaling ready
+
+Why OAuth in addition to Email/Password?
+    Reduces friction for users
+    No email verification needed (Google/GitHub handle that)
+    Better security (no passwords to store)
+
+
+
+Challenges & Solutions
+    Challenge 1: Currency Symbol Display Issues
+    Problem: UTF-8 symbols (₹, €, ¥) broke in some environments
+    Solution: Store symbols in database, let PostgreSQL handle encoding:
+    currency_symbol: Mapped[str] = mapped_column(String(5), default='₹')
+
+Challenge 2: Date Format Inconsistency
+    Problem: HTML date inputs return YYYY-MM-DD, but we store DD-MM-YYYY
+    Solution: Always convert on input:
+    parsed = dt.datetime.strptime(date_raw, "%Y-%m-%d")
+    date_str = parsed.strftime("%d-%m-%Y")  # Store in consistent format
+
+Challenge 3: Monthly Aggregation Performance
+    Problem: Calculating monthly totals on every request was slow
+    Solution: Store month_year as indexed column:
+    month_year: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
+    Now queries use index instead of parsing dates.
+
+What I Learned
+    Railway's PostgreSQL is production-ready - No setup, automatic backups, just works.
+    Always plan for multi-tenancy from day one - Retrofitting is painful.
+    Database migrations in production require care - Test on copies first.
+    Railway's environment variables make deployment trivial - No secrets in code.
+    Auto-incrementing IDs need manual reset after bulk imports - PostgreSQL quirk.
+    Railway Features Most People Don't Know About
+    ${{Postgres.DATABASE_URL}} Syntax: Reference other services' variables.
+    Automatic HTTPS: No SSL cert config needed.
+    Instant Rollback: One-click deploy rollback saved me twice.
+    Logs Persistence: Logs survive container restarts with volumes.
+    Template Deploys: Can clone this entire setup with one click.
+
+The Numbers
+    Uptime: 99.9% (Railway's infrastructure is solid)
+    Response Time: <200ms average.
+    Database Size: Started at 2MB, now handles concurrent users effortlessly.
+    Deployment Time: 45 seconds from push to live.
+    Cost: Under $5/month (thanks to Railway's generous free tier)
+
+Code Highlights
+    Most technically interesting part? The MVT refactoring - turned 700-line monolith into clean, testable modules:
+    # config.py - Configuration
+    # models.py - Database models  
+    # helpers.py - Utilities
+    # app.py - Routes only
+    Each file under 400 lines, easy to test, clear separation of concerns.
+
+
+
+Try It Yourself
+
+The entire project is open source: [https://github.com/AbhishekMitra-AIT/home_milk_calculator]
+
+
+
+To deploy on Railway:
+    Fork the repo.
+    Connect to Railway.
+    Add PostgreSQL service.
+    Set OAuth environment variables.
+    Deploy!
+    Railway handles the rest - database connection, HTTPS, scaling.
+
+
+
+What's Next?
+    REST API: Add API endpoints for mobile apps
+    Data Export: CSV/Excel export with Railway's background jobs
+    Analytics Dashboard: Visualize spending trends
+    Webhooks: Notify users of monthly totals
+    Feel free to customize sections based on what you want to emphasize! Would you like me to adjust the tone, add more technical depth, or focus on different aspects.

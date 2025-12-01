@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Float, Boolean, DateTime, ForeignKey
@@ -12,6 +12,14 @@ from functools import wraps
 from itsdangerous import URLSafeTimedSerializer
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from flask_cors import CORS
+from utils.jwt_auth import (
+    generate_access_token,
+    generate_refresh_token,
+    decode_token,
+    token_required,
+    get_current_user
+)
 
 # Load environment variables
 load_dotenv()
@@ -25,6 +33,10 @@ db = SQLAlchemy(model_class=Base)
 # Create the app
 app = Flask(__name__)
 
+# Enable CORS for API endpoints
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+
+# Secret Key for sessions and tokens
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
 # Database Configuration - PostgreSQL for production, SQLite for local
@@ -651,6 +663,376 @@ def settings():
     ]
     
     return render_template('settings.html', user=user, currencies=currencies)
+
+
+# ============================================================================
+# JWT API AUTHENTICATION ROUTES (Add to app.py)
+# ============================================================================
+
+@app.route('/api/auth/register', methods=['POST'])
+def api_register():
+    """JWT-based registration"""
+    data = request.get_json()
+    
+    if not data or not data.get('email') or not data.get('password'):
+        return jsonify({'message': 'Email and password required'}), 400
+    
+    email = data.get('email')
+    username = data.get('username', email.split('@')[0])
+    password = data.get('password')
+    
+    # Check if user exists
+    existing_user = db.session.query(User).filter_by(email=email).first()
+    if existing_user:
+        return jsonify({'message': 'Email already registered'}), 409
+    
+    # Create new user
+    new_user = User(
+        email=email,
+        username=username,
+        password_hash=generate_password_hash(password),
+        email_verified=True
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    
+    # Generate tokens
+    access_token = generate_access_token(new_user.id, new_user.email)
+    refresh_token = generate_refresh_token(new_user.id, new_user.email)
+    
+    # Store refresh token
+    new_user.refresh_token = refresh_token
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Registration successful',
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'user': {
+            'id': new_user.id,
+            'email': new_user.email,
+            'username': new_user.username
+        }
+    }), 201
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    """JWT-based login"""
+    data = request.get_json()
+    
+    if not data or not data.get('email') or not data.get('password'):
+        return jsonify({'message': 'Email and password required'}), 400
+    
+    email = data.get('email')
+    password = data.get('password')
+    
+    # Find user
+    user = db.session.query(User).filter_by(email=email).first()
+    
+    if not user or not user.password_hash:
+        return jsonify({'message': 'Invalid credentials'}), 401
+    
+    # Verify password
+    if not check_password_hash(user.password_hash, password):
+        return jsonify({'message': 'Invalid credentials'}), 401
+    
+    if not user.email_verified:
+        return jsonify({'message': 'Please verify your email'}), 403
+    
+    # Generate tokens
+    access_token = generate_access_token(user.id, user.email)
+    refresh_token = generate_refresh_token(user.id, user.email)
+    
+    # Store refresh token
+    user.refresh_token = refresh_token
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Login successful',
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'user': {
+            'id': user.id,
+            'email': user.email,
+            'username': user.username,
+            'currency_symbol': user.currency_symbol
+        }
+    }), 200
+
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def api_refresh_token():
+    """Refresh access token"""
+    data = request.get_json()
+    
+    if not data or not data.get('refresh_token'):
+        return jsonify({'message': 'Refresh token required'}), 400
+    
+    refresh_token = data.get('refresh_token')
+    
+    # Decode refresh token
+    payload = decode_token(refresh_token)
+    
+    if not payload or payload.get('type') != 'refresh':
+        return jsonify({'message': 'Invalid refresh token'}), 401
+    
+    # Get user
+    user = db.session.get(User, payload['user_id'])
+    
+    if not user or user.refresh_token != refresh_token:
+        return jsonify({'message': 'Invalid refresh token'}), 401
+    
+    # Generate new access token
+    new_access_token = generate_access_token(user.id, user.email)
+    
+    return jsonify({
+        'access_token': new_access_token
+    }), 200
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+@token_required
+def api_logout():
+    """Logout - invalidate refresh token"""
+    user = get_current_user()
+    
+    # Clear refresh token
+    user.refresh_token = None
+    db.session.commit()
+    
+    return jsonify({'message': 'Logout successful'}), 200
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def api_get_current_user():
+    """Get current user info"""
+    user = get_current_user()
+    
+    return jsonify({
+        'user': {
+            'id': user.id,
+            'email': user.email,
+            'username': user.username,
+            'currency': user.currency,
+            'currency_symbol': user.currency_symbol,
+            'milk_price_per_litre': user.milk_price_per_litre
+        }
+    }), 200
+
+
+# ============================================================================
+# JWT-PROTECTED MILK CRUD API ROUTES (Add to app.py)
+# ============================================================================
+
+@app.route('/api/milk/records', methods=['GET'])
+@token_required
+def api_get_milk_records():
+    """Get all milk records"""
+    user = get_current_user()
+    
+    result = db.session.execute(
+        db.select(Milk)
+        .filter_by(user_id=user.id)
+        .order_by(Milk.date.desc())
+    )
+    milk_data = list(result.scalars())
+    
+    # Group by month
+    monthly_data = defaultdict(list)
+    for record in milk_data:
+        if record.month_year:
+            monthly_data[record.month_year].append({
+                'id': record.id,
+                'date': record.date,
+                'milk_qty': record.milk_qty,
+                'cost': record.cost
+            })
+    
+    # Calculate monthly totals
+    monthly_totals = {}
+    for month, records in monthly_data.items():
+        monthly_totals[month] = sum(r['cost'] for r in records)
+    
+    return jsonify({
+        'monthly_data': dict(monthly_data),
+        'monthly_totals': monthly_totals,
+        'total_records': len(milk_data)
+    }), 200
+
+
+@app.route('/api/milk/records', methods=['POST'])
+@token_required
+def api_add_milk_record():
+    """Add new milk record"""
+    user = get_current_user()
+    data = request.get_json()
+    
+    if not data or not data.get('milk_qty'):
+        return jsonify({'message': 'Milk quantity required'}), 400
+    
+    try:
+        milk_qty = float(data.get('milk_qty'))
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid milk quantity'}), 400
+    
+    cost = milk_qty * user.milk_price_per_litre
+    
+    # Handle date
+    date_raw = data.get('date')
+    if date_raw:
+        try:
+            parsed = dt.datetime.strptime(date_raw, "%Y-%m-%d")
+            date_str = parsed.strftime("%d-%m-%Y")
+            month_year_str = parsed.strftime("%m-%Y")
+        except (ValueError, TypeError):
+            now = dt.datetime.now()
+            date_str = now.strftime("%d-%m-%Y")
+            month_year_str = now.strftime("%m-%Y")
+    else:
+        now = dt.datetime.now()
+        date_str = now.strftime("%d-%m-%Y")
+        month_year_str = now.strftime("%m-%Y")
+    
+    # Check for duplicate
+    existing_entry = db.session.execute(
+        db.select(Milk).filter_by(date=date_str, user_id=user.id)
+    ).scalar_one_or_none()
+    
+    if existing_entry:
+        return jsonify({'message': f'Entry for {date_str} already exists'}), 409
+    
+    # Create record
+    new_record = Milk(
+        milk_qty=milk_qty,
+        date=date_str,
+        cost=cost,
+        month_year=month_year_str,
+        user_id=user.id
+    )
+    db.session.add(new_record)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Record added successfully',
+        'record': {
+            'id': new_record.id,
+            'date': new_record.date,
+            'milk_qty': new_record.milk_qty,
+            'cost': new_record.cost
+        }
+    }), 201
+
+
+@app.route('/api/milk/records/<int:record_id>', methods=['PUT'])
+@token_required
+def api_update_milk_record(record_id):
+    """Update milk record"""
+    user = get_current_user()
+    
+    milk_record = db.session.execute(
+        db.select(Milk).filter_by(id=record_id, user_id=user.id)
+    ).scalar_one_or_none()
+    
+    if not milk_record:
+        return jsonify({'message': 'Record not found'}), 404
+    
+    data = request.get_json()
+    
+    # Update quantity
+    if 'milk_qty' in data:
+        try:
+            new_qty = float(data['milk_qty'])
+            milk_record.milk_qty = new_qty
+            milk_record.cost = new_qty * user.milk_price_per_litre
+        except (ValueError, TypeError):
+            return jsonify({'message': 'Invalid milk quantity'}), 400
+    
+    # Update date
+    if 'date' in data:
+        try:
+            parsed = dt.datetime.strptime(data['date'], "%Y-%m-%d")
+            milk_record.date = parsed.strftime("%d-%m-%Y")
+            milk_record.month_year = parsed.strftime("%m-%Y")
+        except (ValueError, TypeError):
+            pass
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Record updated successfully',
+        'record': {
+            'id': milk_record.id,
+            'date': milk_record.date,
+            'milk_qty': milk_record.milk_qty,
+            'cost': milk_record.cost
+        }
+    }), 200
+
+
+@app.route('/api/milk/records/<int:record_id>', methods=['DELETE'])
+@token_required
+def api_delete_milk_record(record_id):
+    """Delete milk record"""
+    user = get_current_user()
+    
+    milk_to_delete = db.session.execute(
+        db.select(Milk).filter_by(id=record_id, user_id=user.id)
+    ).scalar_one_or_none()
+    
+    if not milk_to_delete:
+        return jsonify({'message': 'Record not found'}), 404
+    
+    db.session.delete(milk_to_delete)
+    db.session.commit()
+    
+    return jsonify({'message': 'Record deleted successfully'}), 200
+
+
+@app.route('/api/settings', methods=['GET', 'PUT'])
+@token_required
+def api_user_settings():
+    """Get or update user settings"""
+    user = get_current_user()
+    
+    if request.method == 'GET':
+        return jsonify({
+            'settings': {
+                'milk_price_per_litre': user.milk_price_per_litre,
+                'currency': user.currency,
+                'currency_symbol': user.currency_symbol
+            }
+        }), 200
+    
+    # PUT - Update settings
+    data = request.get_json()
+    
+    if 'milk_price_per_litre' in data:
+        try:
+            new_price = float(data['milk_price_per_litre'])
+            if new_price <= 0:
+                return jsonify({'message': 'Price must be greater than 0'}), 400
+            user.milk_price_per_litre = new_price
+        except (ValueError, TypeError):
+            return jsonify({'message': 'Invalid price'}), 400
+    
+    if 'currency' in data:
+        user.currency = data['currency']
+    
+    if 'currency_symbol' in data:
+        user.currency_symbol = data['currency_symbol']
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Settings updated successfully',
+        'settings': {
+            'milk_price_per_litre': user.milk_price_per_litre,
+            'currency': user.currency,
+            'currency_symbol': user.currency_symbol
+        }
+    }), 200
 
 
 if __name__ == "__main__":

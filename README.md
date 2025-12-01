@@ -26,10 +26,11 @@ home_milk_calculator/
 ├── app.py                        # Main application entry point(at root)
 ├── app_refactored.py             # Main refactored app (at root)
 ├── assets/                       # image files
+├── about/                        # details about the project
 ├── instance/                     # db files
-├── models/
+├── models/                       # Database models
 │   ├── __init__.py
-│   └── models.py                 # Database models
+│   └── models.py                 
 ├── supporting_python_files/      # python scripts used while testing app.py
 ├── templates/                    # html files
 │   ├── index.html
@@ -40,7 +41,8 @@ home_milk_calculator/
 │   └── settings.html
 ├── utils/                        # Configuration settings
 │   ├── __init__.py
-│   └── config.py                 
+│   ├── config.py 
+│   └── jwt_auth.py               # JWT utilities here  
 ├── views/                        # Helper functions
 │   ├── __init__.py
 │   └── helpers.py                
@@ -53,11 +55,6 @@ home_milk_calculator/
 ├── sqlite_backup.sql             # postgresql backup
 ```
 
-<!-- ├── src
-│    └──  app.py                    # main application                                           
-│    └──  migrate_database.py       # script for db migration -->
-
-<!-- Ref using python anywhere - https://www.youtube.com/watch?v=Bx_jHawKn5A -->
 
 - website - (https://web-production-01a84.up.railway.app/)
 - Github OAuth Apps - (https://github.com/settings/developers)

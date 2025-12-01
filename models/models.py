@@ -20,12 +20,14 @@ class User(db.Model):
     oauth_provider: Mapped[str] = mapped_column(String(20), nullable=True)
     oauth_id: Mapped[str] = mapped_column(String(200), nullable=True)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.now)
+    
     
     # User settings
     milk_price_per_litre: Mapped[float] = mapped_column(Float, default=50.0)
     currency: Mapped[str] = mapped_column(String(10), default='INR')
     currency_symbol: Mapped[str] = mapped_column(String(5), default='₹')
+    refresh_token: Mapped[str] = mapped_column(String(500), nullable=True)
     
     # Relationship to Milk records
     milk_records = relationship('Milk', back_populates='user', cascade='all, delete-orphan')
